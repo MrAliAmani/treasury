@@ -1,0 +1,37 @@
+# Virtual Environment
+venv/
+env/
+
+# Environment Variables
+.env
+
+# Cache
+.pyc
+.pytest_cache
+backend\__pycache__
+frontend\__pycache__
+config\__pycache__
+tests\__pycache__
+tests\e2e\__pycache__
+tests\integration\__pycache__
+tests\unit\__pycache__
+
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+prompts

@@ -1,0 +1,16 @@
+streamlit
+plotly
+pandas
+numpy
+openpyxl
+fredapi
+python-dotenv
+openbb
+fpdf
+pytest
+pytest-cov
+matplotlib
+scipy
+statsmodels
+psutil
+selenium
