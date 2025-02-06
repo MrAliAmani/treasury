@@ -4,6 +4,7 @@ from plotly.subplots import make_subplots
 import numpy as np
 import pandas as pd
 from typing import List, Dict, Tuple
+import logging
 
 class FinancialVisualizer:
     """Class to create interactive financial visualizations using Plotly"""
@@ -16,153 +17,120 @@ class FinancialVisualizer:
         }
 
     def create_surprise_scatter(self, df: pd.DataFrame) -> go.Figure:
-        """Create scatter plot with regression line"""
-        if df is None or df.empty or 'surprise' not in df.columns or 'yield_change' not in df.columns:
-            return go.Figure()  # Return empty figure
-        
-        # Ensure we have valid data for the fit
-        mask = df['surprise'].notna() & df['yield_change'].notna()
-        valid_data = df[mask]
-        
-        if len(valid_data) < 2:  # Need at least 2 points for regression
-            return go.Figure()
-        
+        """Create scatter plot of value changes"""
         try:
-            # Calculate regression
-            z = np.polyfit(valid_data['surprise'], valid_data['yield_change'], 1)
-            p = np.poly1d(z)
-            
-            # Create figure
+            if df is None or df.empty or 'value' not in df.columns:
+                return None
+
             fig = go.Figure()
             
-            # Add scatter points
-            fig.add_trace(go.Scatter(
-                x=valid_data['surprise'],
-                y=valid_data['yield_change'],
-                mode='markers',
-                name='Data Points'
-            ))
-            
-            # Add regression line
-            x_range = np.linspace(valid_data['surprise'].min(), valid_data['surprise'].max(), 100)
-            fig.add_trace(go.Scatter(
-                x=x_range,
-                y=p(x_range),
-                mode='lines',
-                name='Regression Line'
-            ))
-            
+            for indicator in df['indicator'].unique():
+                data = df[df['indicator'] == indicator].copy()
+                data['value_change'] = data['value'].diff()
+                
+                if len(data) < 2:
+                    continue
+                    
+                fig.add_trace(go.Scatter(
+                    x=data['date'],
+                    y=data['value_change'],
+                    name=indicator,
+                    mode='markers+lines'
+                ))
+
             fig.update_layout(
-                title='Economic Surprises vs Yield Changes',
-                xaxis_title='Surprise',
-                yaxis_title='Yield Change (%)'
+                title='Value Changes Over Time',
+                xaxis_title='Date',
+                yaxis_title='Change in Value',
+                height=500
             )
             
             return fig
-            
         except Exception as e:
-            print(f"Error creating scatter plot: {str(e)}")
-            return go.Figure()  # Return empty figure on error
+            logging.error(f"Error in scatter plot: {e}")
+            return None
 
-    def create_yield_curve_animation(self, 
-                                   maturities: List[int],
-                                   pre_curves: List[List[float]], 
-                                   post_curves: List[List[float]]) -> go.Figure:
-        """
-        Create animated yield curve comparison
-        
-        Args:
-            maturities: List of maturities in years
-            pre_curves: List of pre-event yield curves
-            post_curves: List of post-event yield curves
+    def create_yield_curve_animation(self, df: pd.DataFrame) -> go.Figure:
+        """Create yield curve animation using real data"""
+        try:
+            # Pivot data to get values by date and indicator
+            pivot_df = df.pivot(index='date', columns='indicator', values='value')
+            dates = pivot_df.index.unique()
             
-        Returns:
-            Plotly figure object
-        """
-        fig = go.Figure()
-        
-        # Add initial curves
-        fig.add_trace(go.Scatter(
-            x=maturities,
-            y=pre_curves[0],
-            mode='lines+markers',
-            name='Pre-Event',
-            line=dict(color='orange')
-        ))
-        
-        fig.add_trace(go.Scatter(
-            x=maturities,
-            y=post_curves[0],
-            mode='lines+markers', 
-            name='Post-Event',
-            line=dict(color='purple')
-        ))
-
-        # Create frames for animation
-        frames = []
-        for i in range(len(pre_curves)):
-            frames.append(
-                go.Frame(
-                    data=[
-                        go.Scatter(x=maturities, y=pre_curves[i]),
-                        go.Scatter(x=maturities, y=post_curves[i])
-                    ],
-                    name=str(i)
+            fig = go.Figure()
+            
+            # Add initial curve
+            first_date = dates[0]
+            first_data = pivot_df.loc[first_date]
+            
+            fig.add_trace(go.Scatter(
+                x=first_data.index,
+                y=first_data.values,
+                mode='lines+markers',
+                name=str(first_date)
+            ))
+            
+            # Create frames for animation
+            frames = []
+            for date in dates:
+                data = pivot_df.loc[date]
+                frames.append(
+                    go.Frame(
+                        data=[go.Scatter(
+                            x=data.index,
+                            y=data.values,
+                            mode='lines+markers'
+                        )],
+                        name=str(date)
+                    )
                 )
+            
+            fig.frames = frames
+            fig.update_layout(
+                title="Economic Indicators Over Time",
+                xaxis_title="Indicator",
+                yaxis_title="Value"
             )
             
-        fig.frames = frames
-        
-        # Add animation controls
-        fig.update_layout(
-            title="Dynamic Yield Curve Comparison",
-            xaxis_title="Maturity (Years)",
-            yaxis_title="Yield (%)",
-            updatemenus=[dict(
-                type="buttons",
-                buttons=[
-                    dict(label="Play",
-                         method="animate",
-                         args=[None, {"frame": {"duration": 800}}]),
-                    dict(label="Pause",
-                         method="animate",
-                         args=[[None], {"frame": {"duration": 0}}]),
-                ]
-            )]
-        )
-        
-        return fig
+            return fig
+        except Exception as e:
+            logging.error(f"Error creating yield curve animation: {str(e)}")
+            return go.Figure()
 
-    def create_impact_heatmap(self, impact_matrix: np.ndarray,
-                            indicators: List[str],
-                            maturities: List[str]) -> go.Figure:
-        """
-        Create heatmap of surprise impacts
-        
-        Args:
-            impact_matrix: 2D numpy array of impact values
-            indicators: List of indicator names
-            maturities: List of maturity labels
+    def create_impact_heatmap(self, df: pd.DataFrame) -> go.Figure:
+        """Create heatmap of values over time"""
+        try:
+            if df is None or df.empty or 'value' not in df.columns:
+                return None
+                
+            pivot_df = df.pivot_table(
+                values='value',
+                index=pd.to_datetime(df['date']).dt.strftime('%Y-%m'),
+                columns='indicator',
+                aggfunc='mean'
+            ).fillna(0)
             
-        Returns:
-            Plotly figure object
-        """
-        fig = go.Figure(data=go.Heatmap(
-            z=impact_matrix,
-            x=maturities,
-            y=indicators,
-            colorscale='RdBu',
-            reversescale=True,
-            colorbar=dict(title="Impact")
-        ))
+            if pivot_df.empty:
+                return None
+                
+            fig = go.Figure(data=go.Heatmap(
+                z=pivot_df.values,
+                x=pivot_df.columns.tolist(),
+                y=pivot_df.index.tolist(),
+                colorscale='RdBu'
+            ))
 
-        fig.update_layout(
-            title="Heatmap of Surprise Impacts",
-            xaxis_title="Yield Maturities",
-            yaxis_title="Indicators"
-        )
-        
-        return fig
+            fig.update_layout(
+                title="Values Heatmap",
+                xaxis_title="Indicator",
+                yaxis_title="Date",
+                height=500
+            )
+            
+            return fig
+        except Exception as e:
+            logging.error(f"Error in heatmap: {e}")
+            return None
 
     def create_regression_dashboard(self, 
                                   regression_results: List[Dict]) -> go.Figure:
@@ -199,3 +167,81 @@ class FinancialVisualizer:
         )
         
         return fig 
+
+    def create_time_series(self, df: pd.DataFrame) -> go.Figure:
+        """Create time series plot of actual vs expected values"""
+        try:
+            if df is None or df.empty or 'value' not in df.columns:
+                logging.warning("Missing required data for time series plot")
+                return None
+
+            fig = go.Figure()
+            
+            for indicator in df['indicator'].unique():
+                data = df[df['indicator'] == indicator].copy()
+                if data['value'].isnull().all():
+                    continue
+                    
+                # Plot actual values
+                fig.add_trace(go.Scatter(
+                    x=data['date'],
+                    y=data['value'],
+                    name=f"{indicator}",
+                    mode='lines+markers',
+                    line=dict(color=self.indicator_colors.get(indicator, 'gray'))
+                ))
+
+            fig.update_layout(
+                title="Economic Indicators Over Time",
+                xaxis_title="Date",
+                yaxis_title="Value",
+                height=500
+            )
+            
+            return fig
+        except Exception as e:
+            logging.error(f"Error in time series plot: {e}")
+            return None
+
+    def create_surprise_heatmap(self, df: pd.DataFrame) -> go.Figure:
+        """Create line plot of economic surprises over time"""
+        try:
+            if 'value' not in df.columns or 'expected' not in df.columns:
+                return go.Figure()
+            
+            # Calculate surprises
+            df['surprise'] = df['value'] - df['expected']
+            
+            # Create figure
+            fig = go.Figure()
+            
+            # Add line for each indicator
+            for indicator in df['indicator'].unique():
+                mask = df['indicator'] == indicator
+                data = df[mask].sort_values('date')
+                
+                fig.add_trace(go.Scatter(
+                    x=data['date'],
+                    y=data['surprise'],
+                    mode='lines+markers',
+                    name=indicator,
+                    line=dict(color=self.indicator_colors.get(indicator, 'gray')),
+                    marker=dict(size=8),
+                    hovertemplate=(
+                        "<b>%{x}</b><br>" +
+                        "Surprise: %{y:.2f}<br>"
+                    )
+                ))
+            
+            fig.update_layout(
+                title="Economic Surprises Over Time",
+                xaxis_title="Date",
+                yaxis_title="Surprise",
+                hovermode='closest',
+                showlegend=True
+            )
+            
+            return fig
+        except Exception as e:
+            logging.error(f"Error creating surprise plot: {str(e)}")
+            return go.Figure() 

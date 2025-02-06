@@ -12,7 +12,14 @@ from datetime import datetime, timedelta
 import os
 import pickle
 from fpdf import FPDF
+import sys
 
+# Add project root to Python path when running directly
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(os.path.dirname(current_dir))
+
+# Use absolute imports
 from backend.data_loader import (
     fetch_economic_indicators,
     fetch_treasury_yields,

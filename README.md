@@ -1,158 +1,109 @@
 # Treasury Futures Analysis Dashboard
 
-## Project Description
+## Overview
+A data visualization and analysis platform that explores relationships between economic indicators and Treasury yield curves. Built with Streamlit and Plotly, this dashboard offers interactive visualizations and real-time analysis tools.
 
-A sophisticated data visualization and analysis tool designed to explore the relationship between economic indicators and Treasury yield curves. Built with Streamlit and Plotly, this dashboard provides interactive visualizations and real-time analysis capabilities.
+## Features
+- Interactive visualizations of economic data and yield curves
+- Real-time analysis of economic indicator impacts
+- Statistical correlation tracking and metrics
+- Data export to Excel and PDF formats
+- Responsive design for all devices
 
-### Key Features
+## Prerequisites
+- Python 3.9 or higher
+- Git
+- Docker (optional)
 
-- **Interactive Dashboard**: Real-time visualization of economic data with customizable filters
-- **Data Analysis**: 
-  - Economic indicator impact analysis
-  - Yield curve visualization
-  - Surprise calculation and tracking
-  - Statistical correlations and metrics
-- **Export Capabilities**: 
-  - Excel export for raw data
-  - PDF reports with visualizations
-- **Error Handling**: Robust error management and user feedback
-- **Responsive Design**: Adapts to different screen sizes and devices
+## Quick Start
 
-## Installation
-
-### Prerequisites
-
-- Python 3.13.1 or higher
-- Git (for cloning the repository)
-- Virtual environment management tool (venv)
-
-### Setup Instructions
+### Local Installation
 
 1. Clone the repository:
-```sh
+```bash
 git clone [repository-url]
 cd treasury_futures
 ```
 
-2. Create and activate virtual environment:
-```sh
-# Create virtual environment
-python -m venv venv
+2. Set up Python environment:
+```bash
+# Create environment
+conda create -n treasury python=3.9
+conda activate treasury
 
-# Activate on Windows
-venv\Scripts\activate
-
-# Activate on macOS/Linux
-source venv/bin/activate
-```
-
-3. Install dependencies:
-```sh
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-4. Set up environment variables:
-```sh
-# Copy template file
+3. Configure environment:
+```bash
 cp .env.template .env
-
-# Edit .env file and add your FRED API key
-FRED_API_KEY=your_api_key_here
+# Edit .env and add your FRED API key
 ```
 
-## Usage
-
-### Running the Application
-
-Start the Streamlit app:
-```sh
+4. Run the application:
+```bash
 streamlit run frontend/app.py
 ```
 
-The dashboard will be available at `http://localhost:8501`
+### Docker Installation
 
-### Features Guide
+```bash
+# Build and start
+docker-compose up --build
 
-1. **Data Visualization**:
-   - View economic indicator trends
-   - Analyze yield curve changes
-   - Explore surprise impacts
+# Stop
+docker-compose down
+```
 
-2. **Data Export**:
-   - Export data to Excel for further analysis
-   - Generate PDF reports with visualizations
+## Project Structure
+```
+treasury_futures/
+├── backend/           # Data processing and analysis
+├── frontend/         # Streamlit interface
+└── tests/           # Test suites
+```
 
-3. **Data Filtering**:
-   - Select date ranges
-   - Choose specific indicators
-   - Filter by impact levels
+## Testing
+
+Run specific test categories:
+```bash
+# Unit tests
+pytest -m "unit"
+
+# Integration tests
+pytest -m "integration"
+
+# All tests with coverage
+pytest --cov=backend --cov-report=term-missing
+```
 
 ## Development
 
-### Project Structure
-```
-treasury_futures/
-├── backend/
-│   ├── analysis.py
-│   ├── data_loader.py
-│   ├── data_processor.py
-│   └── visualizations.py
-├── frontend/
-│   ├── app.py
-│   └── __init__.py
-└── tests/
-    ├── integration/
-    │   └── test_app_flow.py
-    └── unit/
-        └── test_data_processing.py
-```
-
-### Running Tests
-
-1. Unit Tests:
-```sh
-pytest tests/unit/test_data_processing.py
-```
-
-2. Integration Tests:
-```sh
-pytest tests/integration/test_app_flow.py
-```
-
-3. Run with Coverage:
-```sh
-pytest --cov=your_package tests/
-coverage html  # Generate HTML report
-```
-
-### Test Categories
-
-- **Unit Tests**: Test individual components and functions
-- **Integration Tests**: Test component interactions and data flow
-- **End-to-End Tests**: Test complete user workflows
-
-## Contributing
-
+### Contributing
 1. Fork the repository
 2. Create a feature branch
-3. Make your changes
-4. Run the test suite
-5. Submit a pull request
+3. Make changes and test
+4. Submit a pull request
+
+### Code Style
+- Follow PEP 8 guidelines
+- Include docstrings for all functions
+- Add tests for new features
+
+## API Documentation
+
+### FRED API
+- Requires API key from [FRED API](https://fred.stlouisfed.org/docs/api/fred/)
+- Set key in `.env` file
 
 ## License
+MIT License - See LICENSE file for details
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+## Tech Stack
+- [Streamlit](https://streamlit.io/) - Frontend framework
+- [Plotly](https://plotly.com/) - Data visualization
+- [FRED API](https://fred.stlouisfed.org/docs/api/fred/) - Economic data source
 
-## Acknowledgments
-
-- Built with [Streamlit](https://streamlit.io/)
-- Data visualization powered by [Plotly](https://plotly.com/)
-- Economic data provided by [FRED API](https://fred.stlouisfed.org/docs/api/fred/)
-
-To run the dockerized application:
-
-Build and start the containers:
-docker-compose up --build
-
-Stop the containers:
-docker-compose down
+## Support
+For issues and feature requests, please use the GitHub issue tracker.

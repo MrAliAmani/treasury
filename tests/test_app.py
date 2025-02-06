@@ -7,7 +7,7 @@ from streamlit.testing.v1 import AppTest
 import sys
 import os
 import tempfile
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, MagicMock
 import json
 import time
 
@@ -96,20 +96,19 @@ class TestApp:
         assert len(excel_data) > 0
         
     @pytest.mark.unit
-    def test_export_to_pdf(self, sample_df, mocker):
+    def test_export_to_pdf(self, sample_df):
         """Test PDF export functionality"""
-        # Mock date_range and selected_indicators since they're from st.sidebar
-        mocker.patch('frontend.app.date_range', return_value=('2024-01-01', '2024-01-10'))
-        mocker.patch('frontend.app.selected_indicators', return_value=['Inflation', 'Growth'])
-        
-        figs = {
-            'scatter': go.Figure(),
-            'curve': go.Figure(),
-            'heatmap': go.Figure()
+        # Create mock figures
+        mock_figs = {
+            'scatter': MagicMock(),
+            'curve': MagicMock(),
+            'heatmap': MagicMock()
         }
         
-        pdf_data = export_to_pdf(figs, sample_df)
+        # Test the export
+        pdf_data = export_to_pdf(mock_figs, sample_df)
         
+        # Assert the result is bytes and not empty
         assert isinstance(pdf_data, bytes)
         assert len(pdf_data) > 0
 

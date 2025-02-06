@@ -13,13 +13,165 @@ import signal
 import requests
 import platform
 import psutil
+from pathlib import Path
 from typing import Generator
+import sys
+
+# Add project root to Python path
+project_root = Path(__file__).parent.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
+
+# Import the components we want to test
+from backend.data_fetcher import DataFetcher
+from backend.fetch_fred import fetch_fred_data
+from backend.fetch_openbb import fetch_data as fetch_openbb
 
 # Constants
 STREAMLIT_PORT = 8501
 WAIT_TIMEOUT = 20
 MAX_RETRIES = 30
 RETRY_INTERVAL = 1
+
+@pytest.fixture
+def data_fetcher():
+    """Create a DataFetcher instance for testing"""
+    fetcher = DataFetcher(db_path=':memory:')  # Use in-memory SQLite for testing
+    return fetcher
+
+@pytest.mark.e2e
+def test_fred_data_fetching(data_fetcher):
+    """Test FRED data fetching functionality"""
+    # Set up test parameters
+    start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
+    end_date = datetime.now().strftime('%Y-%m-%d')
+    indicators = ['Inflation', 'Growth']
+    
+    try:
+        # Fetch data
+        data = data_fetcher.fetch_market_data(start_date, end_date, indicators)
+        
+        # Verify the data
+        assert not data.empty, "Data should not be empty"
+        assert 'date' in data.columns, "Data should have a date column"
+        assert 'indicator' in data.columns, "Data should have an indicator column"
+        assert 'value' in data.columns, "Data should have a value column"
+        assert set(data['indicator'].unique()) == set(indicators), "All requested indicators should be present"
+        
+    except Exception as e:
+        pytest.fail(f"Data fetching failed: {str(e)}")
+
+@pytest.mark.e2e
+def test_data_caching(data_fetcher):
+    """Test data caching functionality"""
+    start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+    end_date = datetime.now().strftime('%Y-%m-%d')
+    indicators = ['Inflation']
+    
+    # First fetch - should get from source
+    data1 = data_fetcher.fetch_market_data(start_date, end_date, indicators)
+    
+    # Second fetch - should get from cache
+    data2 = data_fetcher.fetch_market_data(start_date, end_date, indicators)
+    
+    # Verify both datasets are identical
+    pd.testing.assert_frame_equal(data1, data2)
+
+@pytest.mark.e2e
+def test_streamlit_integration(streamlit_server, driver):
+    """Test data fetching integration with Streamlit UI"""
+    try:
+        # Wait for initial load
+        WebDriverWait(driver, WAIT_TIMEOUT).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, ".stApp"))
+        )
+        
+        # Test export functionality
+        test_export_functionality(driver)
+        
+    except Exception as e:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        screenshot_path = f"test_streamlit_error_{timestamp}.png"
+        driver.save_screenshot(screenshot_path)
+        print(f"Test failed. Screenshot saved to {screenshot_path}")
+        print(f"Error: {str(e)}")
+        raise
+
+def test_export_functionality(driver):
+    """Test the export functionality in the Streamlit app"""
+    try:
+        # Switch to Export tab
+        tabs = WebDriverWait(driver, 20).until(
+            EC.presence_of_all_elements_located((
+                By.CSS_SELECTOR,
+                "[role='tab'], .streamlit-tabs button"
+            ))
+        )
+        export_tab = next(tab for tab in tabs if "Export" in tab.text)
+        driver.execute_script("arguments[0].click();", export_tab)
+        
+        # Test Excel export
+        excel_button = WebDriverWait(driver, 20).until(
+            EC.element_to_be_clickable((
+                By.XPATH,
+                "//button[contains(., 'Excel')]"
+            ))
+        )
+        driver.execute_script("arguments[0].click();", excel_button)
+        
+        # Verify Excel download button
+        download_button = WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((
+                By.CSS_SELECTOR,
+                "a[download], a[href*='download']"
+            ))
+        )
+        assert download_button.is_displayed()
+        
+        # Test PDF export
+        pdf_button = WebDriverWait(driver, 20).until(
+            EC.element_to_be_clickable((
+                By.XPATH,
+                "//button[contains(., 'PDF')]"
+            ))
+        )
+        driver.execute_script("arguments[0].click();", pdf_button)
+        
+        # Verify PDF download button
+        pdf_download = WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((
+                By.CSS_SELECTOR,
+                "a[download], a[href*='download']"
+            ))
+        )
+        assert pdf_download.is_displayed()
+        
+    except Exception as e:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        screenshot_path = f"test_export_error_{timestamp}.png"
+        driver.save_screenshot(screenshot_path)
+        print(f"Test failed. Screenshot saved to {screenshot_path}")
+        print(f"Error: {str(e)}")
+        raise
+
+@pytest.mark.e2e
+def test_error_handling(data_fetcher):
+    """Test error handling in data fetching"""
+    # Test with invalid dates
+    with pytest.raises(Exception):
+        data_fetcher.fetch_market_data(
+            start_date="invalid_date",
+            end_date="invalid_date",
+            indicators=['Inflation']
+        )
+    
+    # Test with invalid indicators
+    with pytest.raises(Exception):
+        data_fetcher.fetch_market_data(
+            start_date="2023-01-01",
+            end_date="2023-12-31",
+            indicators=['InvalidIndicator']
+        )
 
 def kill_process_on_port(port):
     """Kill any process running on the specified port"""
@@ -40,17 +192,19 @@ def streamlit_server() -> Generator:
     # Kill any existing process on the port
     kill_process_on_port(STREAMLIT_PORT)
     
-    # Determine platform-specific settings
-    is_windows = platform.system() == 'Windows'
-    creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP if is_windows else 0
-    
+    # Start the Streamlit server
+    process = None
     try:
+        cmd = [
+            "streamlit", "run", 
+            str(project_root / "frontend" / "app.py"),
+            "--server.port", str(STREAMLIT_PORT),
+            "--server.headless", "true",
+            "--server.address", "localhost"
+        ]
+        
         process = subprocess.Popen(
-            ["streamlit", "run", "frontend/app.py", 
-             "--server.port", str(STREAMLIT_PORT),
-             "--server.headless", "true",
-             "--server.address", "localhost"],
-            creationflags=creation_flags,
+            cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
@@ -58,44 +212,24 @@ def streamlit_server() -> Generator:
         
         # Wait for server to start
         start_time = time.time()
-        server_ready = False
-        
         while time.time() - start_time < MAX_RETRIES * RETRY_INTERVAL:
             try:
                 response = requests.get(f"http://localhost:{STREAMLIT_PORT}/_stcore/health")
                 if response.status_code == 200:
-                    server_ready = True
                     break
             except requests.exceptions.ConnectionError:
-                if process.poll() is not None:
-                    stdout, stderr = process.communicate()
-                    raise Exception(
-                        f"Streamlit server failed to start.\nStdout: {stdout}\nStderr: {stderr}"
-                    )
                 time.sleep(RETRY_INTERVAL)
-        
-        if not server_ready:
-            raise Exception("Streamlit server failed to respond in time")
         
         yield process
         
-        # Cleanup
-        if is_windows:
-            process.send_signal(signal.CTRL_BREAK_EVENT)
-        else:
+    finally:
+        if process:
             process.terminate()
-        
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
-            
-    except Exception as e:
-        if 'process' in locals():
-            process.kill()
-            process.wait()
-        raise e
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
 
 @pytest.fixture(scope="function")
 def driver(streamlit_server):
@@ -104,33 +238,15 @@ def driver(streamlit_server):
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
     
     driver = webdriver.Chrome(options=options)
-    driver.set_window_size(1920, 1080)
     driver.implicitly_wait(WAIT_TIMEOUT)
     
-    # Connect to app with retry logic
-    connected = False
-    for _ in range(MAX_RETRIES):
-        try:
-            driver.get(f"http://localhost:{STREAMLIT_PORT}")
-            WebDriverWait(driver, WAIT_TIMEOUT).until(
-                EC.presence_of_element_located((By.TAG_NAME, "body"))
-            )
-            connected = True
-            break
-        except Exception:
-            time.sleep(RETRY_INTERVAL)
-    
-    if not connected:
+    try:
+        driver.get(f"http://localhost:{STREAMLIT_PORT}")
+        yield driver
+    finally:
         driver.quit()
-        raise Exception("Failed to connect to Streamlit app")
-    
-    # Additional wait for app to load
-    time.sleep(2)
-    yield driver
-    driver.quit()
 
 def print_element_info(driver, css_selector):
     """Debug helper to print information about elements"""

@@ -5,6 +5,9 @@ env/
 # Environment Variables
 .env
 
+.db
+market_data.db
+
 # Cache
 .pyc
 .pytest_cache

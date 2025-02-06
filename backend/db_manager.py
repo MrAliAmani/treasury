@@ -2,6 +2,7 @@ import sqlite3
 import pandas as pd
 from typing import List, Dict, Any
 from pathlib import Path
+from io import StringIO
 
 class DatabaseManager:
     def __init__(self, db_path: str = "cache/dashboard.db"):
@@ -54,7 +55,7 @@ class DatabaseManager:
         
         if result:
             # Convert JSON string back to DataFrame
-            return pd.read_json(result[0])
+            return pd.read_json(StringIO(result[0]))
         return None
     
     def clear_expired_cache(self):

@@ -2,16 +2,29 @@
 Data loader module for fetching economic data from FRED and other sources.
 """
 
+import os
+import sys
+import logging
 import pandas as pd
 import numpy as np
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, timedelta
-import os
+from pathlib import Path
 from fredapi import Fred
 from dotenv import load_dotenv
-import logging
 import time
-from openbb import obb
+
+# Add project root to Python path when running directly
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(os.path.dirname(current_dir))
+
+# Use absolute imports
+try:
+    from backend.fetch_openbb import obb
+except ImportError:
+    logging.warning("OpenBB SDK not available. Install with 'pip install openbb'")
+    obb = None
 
 # Load environment variables
 load_dotenv()
