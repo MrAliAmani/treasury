@@ -457,6 +457,25 @@ with tab_analysis:
     st.header("Detailed Analysis")
     
     if not df.empty:
+        # Add date selector for detailed analysis
+        available_dates = df['date'].dt.strftime('%Y-%m-%d').unique()
+        selected_date = st.selectbox(
+            "Select Date for Detailed Analysis",
+            options=available_dates,
+            index=0
+        )
+        
+        # Show detailed view for selected date
+        detail_fig = visualizer.create_surprise_detail_view(df, selected_date)
+        if detail_fig:
+            st.plotly_chart(detail_fig, use_container_width=True)
+        
+        # Show intraday analysis
+        st.subheader("Surprise Impact Analysis")
+        intraday_fig = visualizer.create_intraday_surprise_analysis(df)
+        if intraday_fig:
+            st.plotly_chart(intraday_fig, use_container_width=True)
+        
         # Time Series Analysis
         st.subheader("Time Series Analysis")
         time_series_fig = visualizer.create_time_series(df)

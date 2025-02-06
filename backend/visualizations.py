@@ -244,4 +244,171 @@ class FinancialVisualizer:
             return fig
         except Exception as e:
             logging.error(f"Error creating surprise plot: {str(e)}")
-            return go.Figure() 
+            return go.Figure()
+
+    def create_intraday_surprise_analysis(self, df: pd.DataFrame, intraday_df: pd.DataFrame = None) -> go.Figure:
+        """Create detailed analysis of market movement around economic surprises"""
+        try:
+            if df is None or df.empty or 'value' not in df.columns:
+                return None
+
+            # Create figure with secondary y-axis
+            fig = make_subplots(specs=[[{"secondary_y": True}]])
+            
+            for indicator in df['indicator'].unique():
+                data = df[df['indicator'] == indicator].copy()
+                
+                # Calculate surprise
+                if 'expected' in data.columns:
+                    data['surprise'] = data['value'] - data['expected']
+                else:
+                    data['surprise'] = data['value'].diff()
+                
+                # Find significant surprises (>1 std dev)
+                std_surprise = data['surprise'].std()
+                significant_dates = data[abs(data['surprise']) > std_surprise]['date']
+                
+                # Plot surprise points
+                fig.add_trace(
+                    go.Scatter(
+                        x=data['date'],
+                        y=data['surprise'],
+                        mode='markers',
+                        name=f"{indicator} Surprises",
+                        marker=dict(
+                            size=10,
+                            color=self.indicator_colors.get(indicator, 'gray'),
+                            symbol='diamond'
+                        ),
+                        hovertemplate=(
+                            "<b>%{x}</b><br>" +
+                            f"{indicator}<br>" +
+                            "Surprise: %{y:.2f}<br>" +
+                            "<extra></extra>"
+                        )
+                    )
+                )
+                
+                # Add intraday price movement if available
+                if intraday_df is not None:
+                    for surprise_date in significant_dates:
+                        # Get intraday data around the surprise
+                        date_str = surprise_date.strftime('%Y-%m-%d')
+                        intraday_mask = (intraday_df['date'].dt.strftime('%Y-%m-%d') == date_str)
+                        intraday_data = intraday_df[intraday_mask]
+                        
+                        if not intraday_data.empty:
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=intraday_data['date'],
+                                    y=intraday_data['price'],
+                                    mode='lines',
+                                    name=f"Intraday {date_str}",
+                                    line=dict(dash='dot'),
+                                    secondary_y=True
+                                )
+                            )
+
+            # Update layout
+            fig.update_layout(
+                title="Economic Surprises with Intraday Market Movement",
+                xaxis_title="Date",
+                yaxis_title="Surprise Value",
+                yaxis2_title="Market Price",
+                height=600,
+                showlegend=True,
+                # Add vertical lines for significant surprises
+                shapes=[
+                    dict(
+                        type="line",
+                        xref="x",
+                        yref="paper",
+                        x0=date,
+                        x1=date,
+                        y0=0,
+                        y1=1,
+                        line=dict(color="gray", width=1, dash="dash")
+                    )
+                    for date in significant_dates
+                ]
+            )
+            
+            return fig
+            
+        except Exception as e:
+            logging.error(f"Error in intraday analysis: {e}")
+            return None
+
+    def create_surprise_detail_view(self, df: pd.DataFrame, date: str, window_hours: int = 2) -> go.Figure:
+        """Create detailed view of market movement around a specific economic surprise"""
+        try:
+            if df is None or df.empty:
+                return None
+            
+            # Convert date string to datetime if needed
+            surprise_date = pd.to_datetime(date)
+            
+            # Get data for the specific date
+            day_data = df[df['date'].dt.date == surprise_date.date()].copy()
+            
+            if day_data.empty:
+                return None
+            
+            # Create figure
+            fig = go.Figure()
+            
+            for indicator in day_data['indicator'].unique():
+                indicator_data = day_data[day_data['indicator'] == indicator]
+                
+                # Plot actual value
+                fig.add_trace(go.Scatter(
+                    x=[indicator_data['date'].iloc[0]],
+                    y=[indicator_data['value'].iloc[0]],
+                    mode='markers',
+                    name=f"{indicator} Actual",
+                    marker=dict(
+                        size=12,
+                        symbol='star',
+                        color=self.indicator_colors.get(indicator, 'gray')
+                    )
+                ))
+                
+                # Plot expected value if available
+                if 'expected' in indicator_data.columns:
+                    fig.add_trace(go.Scatter(
+                        x=[indicator_data['date'].iloc[0]],
+                        y=[indicator_data['expected'].iloc[0]],
+                        mode='markers',
+                        name=f"{indicator} Expected",
+                        marker=dict(
+                            size=12,
+                            symbol='circle',
+                            color=self.indicator_colors.get(indicator, 'gray')
+                        )
+                    ))
+            
+            # Update layout
+            fig.update_layout(
+                title=f"Economic Release Detail - {surprise_date.strftime('%Y-%m-%d')}",
+                xaxis_title="Time",
+                yaxis_title="Value",
+                height=400,
+                showlegend=True,
+                # Add release time marker
+                shapes=[dict(
+                    type="line",
+                    xref="x",
+                    yref="paper",
+                    x0=surprise_date,
+                    x1=surprise_date,
+                    y0=0,
+                    y1=1,
+                    line=dict(color="red", width=2)
+                )]
+            )
+            
+            return fig
+            
+        except Exception as e:
+            logging.error(f"Error in detail view: {e}")
+            return None 
