@@ -412,3 +412,115 @@ class FinancialVisualizer:
         except Exception as e:
             logging.error(f"Error in detail view: {e}")
             return None 
+
+    def create_yield_curve_indicator_plot(self, yields_df: pd.DataFrame, indicators_df: pd.DataFrame) -> go.Figure:
+        """Create plot comparing yield curves with economic indicators"""
+        try:
+            if yields_df.empty or indicators_df.empty:
+                return None
+
+            # Create figure with secondary y-axis
+            fig = make_subplots(specs=[[{"secondary_y": True}]])
+            
+            # Plot yield curves
+            yield_columns = ['2Y', '5Y', '10Y']
+            for col in yield_columns:
+                if col in yields_df.columns:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=yields_df.index,
+                            y=yields_df[col],
+                            name=f"{col} Yield",
+                            line=dict(width=2),
+                        ),
+                        secondary_y=False
+                    )
+            
+            # Plot indicators on secondary axis
+            for indicator in indicators_df['indicator'].unique():
+                indicator_data = indicators_df[indicators_df['indicator'] == indicator]
+                fig.add_trace(
+                    go.Scatter(
+                        x=indicator_data['date'],
+                        y=indicator_data['value'],
+                        name=indicator,
+                        line=dict(
+                            dash='dot',
+                            color=self.indicator_colors.get(indicator, 'gray')
+                        )
+                    ),
+                    secondary_y=True
+                )
+            
+            # Update layout
+            fig.update_layout(
+                title="Yield Curves vs Economic Indicators",
+                xaxis_title="Date",
+                height=600,
+                hovermode='x unified',
+                showlegend=True
+            )
+            fig.update_yaxes(title_text="Yield (%)", secondary_y=False)
+            fig.update_yaxes(title_text="Indicator Value", secondary_y=True)
+            
+            return fig
+            
+        except Exception as e:
+            logging.error(f"Error creating yield curve indicator plot: {e}")
+            return None
+
+    def create_missing_data_table(self, df: pd.DataFrame) -> go.Figure:
+        """Create interactive table showing missing data periods"""
+        try:
+            missing_periods = []
+            
+            for indicator in df['indicator'].unique():
+                indicator_data = df[df['indicator'] == indicator].copy()
+                indicator_data['date'] = pd.to_datetime(indicator_data['date'])
+                indicator_data = indicator_data.sort_values('date')
+                
+                # Find gaps larger than 30 days
+                date_diff = indicator_data['date'].diff()
+                gaps = indicator_data[date_diff > pd.Timedelta(days=30)]
+                
+                for idx in gaps.index:
+                    start_date = indicator_data.loc[idx-1, 'date'].strftime('%Y-%m-%d')
+                    end_date = indicator_data.loc[idx, 'date'].strftime('%Y-%m-%d')
+                    missing_periods.append({
+                        'Indicator': indicator,
+                        'Start Date': start_date,
+                        'End Date': end_date,
+                        'Gap (Days)': date_diff[idx].days
+                    })
+            
+            if not missing_periods:
+                return None
+            
+            # Create table
+            fig = go.Figure(data=[go.Table(
+                header=dict(
+                    values=['Indicator', 'Start Date', 'End Date', 'Gap (Days)'],
+                    fill_color='paleturquoise',
+                    align='left'
+                ),
+                cells=dict(
+                    values=[
+                        [d['Indicator'] for d in missing_periods],
+                        [d['Start Date'] for d in missing_periods],
+                        [d['End Date'] for d in missing_periods],
+                        [d['Gap (Days)'] for d in missing_periods]
+                    ],
+                    align='left'
+                )
+            )])
+            
+            fig.update_layout(
+                title="Missing Data Periods",
+                height=400
+            )
+            
+            return fig
+            
+        except Exception as e:
+            logging.error(f"Error creating missing data table: {e}")
+            return None 

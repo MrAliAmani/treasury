@@ -1,4 +1,14 @@
 import streamlit as st
+import sys
+from pathlib import Path
+
+# Add project root to Python path BEFORE imports
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
+
+# Now import from backend
+from backend.data_loader import fetch_treasury_yields
 
 # Must be the first Streamlit command
 st.set_page_config(
@@ -7,15 +17,7 @@ st.set_page_config(
     layout="wide"
 )
 
-import sys
-from pathlib import Path
 import time
-
-# Add project root to Python path
-project_root = Path(__file__).parent.parent
-if str(project_root) not in sys.path:
-    sys.path.append(str(project_root))
-
 import pandas as pd
 import numpy as np
 from datetime import date, datetime, timedelta
@@ -373,8 +375,8 @@ def create_pdf_download_button(figs, df, key_prefix=""):
 st.title("Financial Analysis Dashboard")
 
 # Create tabs
-tab_overview, tab_analysis, tab_export = st.tabs([
-    "Overview", "Detailed Analysis", "Export"
+tab_overview, tab_analysis, tab_export, tab_yield_analysis, tab_missing_data = st.tabs([
+    "Overview", "Detailed Analysis", "Export", "Yield Analysis", "Missing Data"
 ])
 
 # Load Data
@@ -552,3 +554,60 @@ st.markdown(
 st.session_state.scatter_fig = scatter_fig
 st.session_state.curve_fig = curve_fig
 st.session_state.heatmap_fig = heatmap_fig 
+
+# Add after the existing tab implementations
+with tab_yield_analysis:
+    st.header("Yield Curves Analysis")
+    
+    if not df.empty:
+        # Get yield data
+        try:
+            yield_data = fetch_treasury_yields(
+                start_date=date_range[0].strftime('%Y-%m-%d'),
+                end_date=date_range[1].strftime('%Y-%m-%d'),
+                maturities=['DGS2', 'DGS5', 'DGS10']
+            )
+            
+            # Create yield curve plot
+            yield_fig = visualizer.create_yield_curve_indicator_plot(yield_data, df)
+            if yield_fig:
+                st.plotly_chart(yield_fig, use_container_width=True)
+            else:
+                st.warning("No yield curve data available for the selected period.")
+                
+        except Exception as e:
+            st.error(f"Error loading yield curve data: {str(e)}")
+    else:
+        st.warning("No indicator data available. Please load data first.")
+
+with tab_missing_data:
+    st.header("Missing Data Analysis")
+    
+    if not df.empty:
+        # Create missing data table
+        missing_data_fig = visualizer.create_missing_data_table(df)
+        if missing_data_fig:
+            st.plotly_chart(missing_data_fig, use_container_width=True)
+        else:
+            st.success("No significant data gaps found in the selected period.")
+            
+        # Add download button for missing data report
+        if st.button("📥 Download Missing Data Report"):
+            # Convert missing periods to DataFrame for download
+            missing_df = pd.DataFrame(missing_data_fig.data[0].cells.values).T
+            missing_df.columns = missing_data_fig.data[0].header.values
+            
+            # Create Excel buffer
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                missing_df.to_excel(writer, sheet_name='Missing Data', index=False)
+            
+            # Offer download
+            st.download_button(
+                label="Download Excel File",
+                data=buffer.getvalue(),
+                file_name="missing_data_report.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+    else:
+        st.warning("No data available for missing data analysis.")
