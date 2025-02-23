@@ -524,3 +524,59 @@ class FinancialVisualizer:
         except Exception as e:
             logging.error(f"Error creating missing data table: {e}")
             return None 
+
+    def create_gap_yield_curve_comparison(self, yields_df: pd.DataFrame, gap_start: str, gap_end: str) -> go.Figure:
+        """
+        Create yield curve comparison for periods around a data gap.
+        
+        Args:
+            yields_df: DataFrame with yield data
+            gap_start: Start date of gap period
+            gap_end: End date of gap period
+            
+        Returns:
+            Plotly figure comparing yield curves
+        """
+        try:
+            # Convert dates to datetime
+            gap_start = pd.to_datetime(gap_start)
+            gap_end = pd.to_datetime(gap_end)
+            
+            # Get data for 5 days before gap and 5 days after
+            pre_gap = yields_df.loc[gap_start - pd.Timedelta(days=5):gap_start]
+            post_gap = yields_df.loc[gap_end:gap_end + pd.Timedelta(days=5)]
+            
+            fig = go.Figure()
+            
+            # Plot pre-gap curves
+            if not pre_gap.empty:
+                fig.add_trace(go.Scatter(
+                    x=pre_gap.columns,  # Assuming columns are maturities
+                    y=pre_gap.iloc[-1],  # Last curve before gap
+                    name=f'Pre-Gap ({gap_start.strftime("%Y-%m-%d")})',
+                    line=dict(color='blue')
+                ))
+                
+            # Plot post-gap curves
+            if not post_gap.empty:
+                fig.add_trace(go.Scatter(
+                    x=post_gap.columns,
+                    y=post_gap.iloc[0],  # First curve after gap
+                    name=f'Post-Gap ({gap_end.strftime("%Y-%m-%d")})',
+                    line=dict(color='red', dash='dash')
+                ))
+                
+            fig.update_layout(
+                title=f'Yield Curve Comparison Around Gap Period',
+                xaxis_title='Maturity',
+                yaxis_title='Yield (%)',
+                height=400,
+                showlegend=True,
+                hovermode='x unified'
+            )
+            
+            return fig
+            
+        except Exception as e:
+            logging.error(f"Error creating gap yield curve comparison: {e}")
+            return None 

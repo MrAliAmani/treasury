@@ -587,27 +587,65 @@ with tab_missing_data:
         # Create missing data table
         missing_data_fig = visualizer.create_missing_data_table(df)
         if missing_data_fig:
+            # Add callback for row selection
+            selected_indices = []
+            
+            # Convert table data to DataFrame for selection
+            table_data = pd.DataFrame({
+                'Indicator': missing_data_fig.data[0].cells.values[0],
+                'Start Date': missing_data_fig.data[0].cells.values[1],
+                'End Date': missing_data_fig.data[0].cells.values[2],
+                'Gap (Days)': missing_data_fig.data[0].cells.values[3]
+            })
+            
+            # Create selectbox for gap periods
+            selected_gap = st.selectbox(
+                "Select Gap Period to Analyze",
+                options=[f"{row['Indicator']}: {row['Start Date']} to {row['End Date']}" 
+                        for _, row in table_data.iterrows()],
+                key="gap_selector"
+            )
+            
+            # Display the table
             st.plotly_chart(missing_data_fig, use_container_width=True)
+            
+            # If a gap is selected, show yield curve comparison
+            if selected_gap:
+                # Extract dates from selection
+                indicator = selected_gap.split(':')[0]
+                start_date = selected_gap.split(' to ')[0].split(': ')[1]
+                end_date = selected_gap.split(' to ')[1]
+                
+                # Fetch yield data for the period
+                try:
+                    yield_data = fetch_treasury_yields(
+                        start_date=pd.to_datetime(start_date) - pd.Timedelta(days=5),
+                        end_date=pd.to_datetime(end_date) + pd.Timedelta(days=5),
+                        maturities=['DGS2', 'DGS5', 'DGS10']
+                    )
+                    
+                    if not yield_data.empty:
+                        # Create and display yield curve comparison
+                        gap_yield_fig = visualizer.create_gap_yield_curve_comparison(
+                            yield_data, start_date, end_date
+                        )
+                        if gap_yield_fig:
+                            st.subheader(f"Yield Curve Comparison Around {indicator} Gap")
+                            st.plotly_chart(gap_yield_fig, use_container_width=True)
+                            
+                            # Add some analysis text
+                            st.markdown("""
+                                #### Analysis
+                                - Blue line shows the yield curve just before the gap period
+                                - Red dashed line shows the yield curve right after the gap
+                                - Compare the curves to see how the yield curve shape changed during the missing data period
+                            """)
+                    else:
+                        st.warning("No yield curve data available for this period.")
+                        
+                except Exception as e:
+                    st.error(f"Error loading yield curve data: {str(e)}")
         else:
             st.success("No significant data gaps found in the selected period.")
-            
-        # Add download button for missing data report
-        if st.button("📥 Download Missing Data Report"):
-            # Convert missing periods to DataFrame for download
-            missing_df = pd.DataFrame(missing_data_fig.data[0].cells.values).T
-            missing_df.columns = missing_data_fig.data[0].header.values
-            
-            # Create Excel buffer
-            buffer = io.BytesIO()
-            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                missing_df.to_excel(writer, sheet_name='Missing Data', index=False)
-            
-            # Offer download
-            st.download_button(
-                label="Download Excel File",
-                data=buffer.getvalue(),
-                file_name="missing_data_report.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
     else:
         st.warning("No data available for missing data analysis.")
