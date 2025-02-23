@@ -219,7 +219,7 @@ if st.sidebar.button("🔄 Refresh Data", help="Click to fetch latest data", key
         st.session_state["show_error"] = True
         st.session_state["error_message"] = str(e)
         st.session_state["data_refreshed"] = False
-        st.error(f"Error fetching market data: {str(e)}")
+        # st.error(f"Error fetching market data: {str(e)}")
         df = pd.DataFrame()
 
 # Update date validation with proper alert
